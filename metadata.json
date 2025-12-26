@@ -1,0 +1,8 @@
+{
+  "name": "Dr. Caio Henrique - Advocacia de Excelência",
+  "description": "A premium legal services landing page with an AI-powered legal assistant and an administrative CMS mode for real-time content updates.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

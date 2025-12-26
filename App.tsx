@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { INITIAL_CONTENT } from './constants';
-import { SiteContent } from './types';
+import { SiteContent, ServiceItem } from './types';
 import EditableText from './components/EditableText';
 import ChatWidget from './components/ChatWidget';
 
@@ -15,6 +15,12 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [rotatingIndex, setRotatingIndex] = useState(0);
   const [showSaveIndicator, setShowSaveIndicator] = useState(false);
+  const [routeInput, setRouteInput] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // States para Formulário de Serviço
+  const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
+  const [formData, setFormData] = useState({ name: '', details: '', specific: '' });
 
   const WHATSAPP_NUMBER = "5589999867161";
   const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}`;
@@ -26,14 +32,33 @@ const App: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  // Auto-save when content changes (and we are in admin mode)
+  const handleCalculateRoute = () => {
+    if (!routeInput.trim()) {
+      alert('Por favor, digite seu endereço para calcular a rota.');
+      return;
+    }
+    const destination = encodeURIComponent(content.location.address);
+    const origin = encodeURIComponent(routeInput);
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
+    window.open(mapsUrl, '_blank');
+  };
+
+  const handleServiceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedService) return;
+    
+    const message = `Olá Dr. Caio!\n\n*Assunto:* ${selectedService.title}\n*Nome:* ${formData.name}\n*Informações:* ${formData.details}\n*Complemento:* ${formData.specific}`;
+    openWhatsApp(message);
+    setSelectedService(null);
+    setFormData({ name: '', details: '', specific: '' });
+  };
+
   useEffect(() => {
     if (isAdmin) {
       localStorage.setItem('site_content', JSON.stringify(content));
     }
   }, [content, isAdmin]);
 
-  // Rotation for Hero text
   useEffect(() => {
     const interval = setInterval(() => {
       setRotatingIndex((prev) => (prev + 1) % content.hero.rotatingSpecialties.length);
@@ -52,7 +77,6 @@ const App: React.FC = () => {
       current[keys[keys.length - 1]] = value;
       return newContent;
     });
-    
     setShowSaveIndicator(true);
     setTimeout(() => setShowSaveIndicator(false), 2000);
   }, []);
@@ -68,16 +92,108 @@ const App: React.FC = () => {
     }
   };
 
-  const handleScrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+  const handleScrollToSection = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     const element = document.getElementById(id);
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+      const headerOffset = 90;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+      setIsMobileMenuOpen(false);
     }
   };
 
+  const menuItems = [
+    { label: 'Início', id: 'inicio' },
+    { label: 'Sobre', id: 'sobre' },
+    { label: 'Atuação', id: 'atuacao' },
+    { label: 'Localização', id: 'localizacao' },
+    { label: 'Contato', id: 'contato' }
+  ];
+
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden selection:bg-blue-100">
+      {/* Modal de Formulário de Serviço */}
+      {selectedService && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl animate-fade-up">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-blue-50 rounded-lg flex items-center justify-center text-[#136dec]">
+                  <span className="material-symbols-outlined">{selectedService.icon}</span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800">{selectedService.title}</h3>
+              </div>
+              <button onClick={() => setSelectedService(null)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <form onSubmit={handleServiceSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Seu Nome</label>
+                <input 
+                  required
+                  type="text" 
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  placeholder="Como podemos te chamar?"
+                  className="w-full rounded-xl border-slate-200 focus:border-[#136dec] focus:ring-[#136dec]" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Breve Descrição do Caso</label>
+                <textarea 
+                  required
+                  value={formData.details}
+                  onChange={e => setFormData({...formData, details: e.target.value})}
+                  placeholder="Conte um pouco sobre sua necessidade..."
+                  rows={3}
+                  className="w-full rounded-xl border-slate-200 focus:border-[#136dec] focus:ring-[#136dec]" 
+                />
+              </div>
+              {selectedService.formType === 'property' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Localização do Imóvel</label>
+                  <input 
+                    type="text" 
+                    value={formData.specific}
+                    onChange={e => setFormData({...formData, specific: e.target.value})}
+                    placeholder="Cidade / Bairro"
+                    className="w-full rounded-xl border-slate-200 focus:border-[#136dec] focus:ring-[#136dec]" 
+                  />
+                </div>
+              )}
+              {selectedService.formType === 'contract' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Contrato</label>
+                  <input 
+                    type="text" 
+                    value={formData.specific}
+                    onChange={e => setFormData({...formData, specific: e.target.value})}
+                    placeholder="Ex: Compra e Venda, Aluguel..."
+                    className="w-full rounded-xl border-slate-200 focus:border-[#136dec] focus:ring-[#136dec]" 
+                  />
+                </div>
+              )}
+              
+              <button 
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 bg-[#25D366] text-white py-4 rounded-xl font-bold hover:bg-[#128C7E] transition-all shadow-lg shadow-emerald-100"
+              >
+                <span className="material-symbols-outlined">send</span>
+                Enviar para WhatsApp
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Admin Login Overlay */}
       {showLogin && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -118,70 +234,86 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Admin Controls Floating Toolbar */}
-      {isAdmin && (
-        <div className="fixed left-6 bottom-6 z-[150] flex flex-col gap-3">
-          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 min-w-[200px]">
-             <div className="flex items-center gap-2 mb-2 text-emerald-400 font-bold text-sm">
-               <span className="material-symbols-outlined text-sm">lock_open</span>
-               Modo Edição Ativo
-             </div>
-             <p className="text-[10px] text-slate-400 mb-4">Clique nos textos pontilhados para alterar.</p>
-             <button
-              onClick={() => setIsAdmin(false)}
-              className="w-full bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
-             >
-               <span className="material-symbols-outlined text-sm">logout</span>
-               Sair do Modo Admin
-             </button>
-          </div>
-          {showSaveIndicator && (
-            <div className="bg-emerald-500 text-white px-4 py-2 rounded-full text-[10px] font-bold shadow-lg animate-bounce flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">cloud_done</span>
-              Salvo no Navegador
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-[#101822] border-b border-white/10 px-6 py-4 lg:px-20 text-white shadow-2xl">
+        <div className="container mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#136dec] shadow-lg shadow-blue-500/20">
+              <span className="material-symbols-outlined text-white text-xl">balance</span>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-white/5 bg-[#101822] px-6 py-4 shadow-xl lg:px-20 text-white">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#136dec]">
-            <span className="material-symbols-outlined text-white">balance</span>
+            <EditableText
+              isAdmin={isAdmin}
+              value={content.header.title}
+              onChange={(val) => updateField('header.title', val)}
+              as="h2"
+              className="text-xl font-black tracking-tight"
+            />
           </div>
-          <EditableText
-            isAdmin={isAdmin}
-            value={content.header.title}
-            onChange={(val) => updateField('header.title', val)}
-            as="h2"
-            className="text-xl font-bold tracking-tight"
-          />
+
+          {/* Desktop Navigation */}
+          <nav className="hidden lg:flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/5">
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={(e) => handleScrollToSection(e, item.id)}
+                className="px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all hover:text-[#136dec] active:scale-95"
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => openWhatsApp("Olá Dr. Caio, gostaria de agendar uma consulta.")}
+              className="hidden md:flex items-center gap-2 rounded-full bg-[#136dec] px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-500/30 active:scale-95"
+            >
+              <EditableText
+                isAdmin={isAdmin}
+                value={content.header.cta}
+                onChange={(val) => updateField('header.cta', val)}
+              />
+            </button>
+            
+            {/* Mobile Menu Toggle */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="flex lg:hidden h-10 w-10 items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              <span className="material-symbols-outlined">
+                {isMobileMenuOpen ? 'close' : 'menu'}
+              </span>
+            </button>
+          </div>
         </div>
-        <nav className="hidden items-center gap-8 lg:flex">
-          <a href="#inicio" onClick={(e) => handleScrollToSection(e, 'inicio')} className="text-sm font-medium hover:text-[#136dec] transition-colors">Início</a>
-          <a href="#sobre" onClick={(e) => handleScrollToSection(e, 'sobre')} className="text-sm font-medium hover:text-[#136dec] transition-colors">Sobre</a>
-          <a href="#atuacao" onClick={(e) => handleScrollToSection(e, 'atuacao')} className="text-sm font-medium hover:text-[#136dec] transition-colors">Atuação</a>
-          <a href="#localizacao" onClick={(e) => handleScrollToSection(e, 'localizacao')} className="text-sm font-medium hover:text-[#136dec] transition-colors">Localização</a>
-          <a href="#contato" onClick={(e) => handleScrollToSection(e, 'contato')} className="text-sm font-medium hover:text-[#136dec] transition-colors">Contato</a>
-        </nav>
-        <button 
-          onClick={() => openWhatsApp("Olá Dr. Caio, gostaria de agendar uma consulta.")}
-          className="hidden rounded-full bg-[#136dec] px-8 py-2.5 text-sm font-bold text-white transition-all hover:bg-blue-600 hover:scale-105 active:scale-95 lg:block"
-        >
-          <EditableText
-            isAdmin={isAdmin}
-            value={content.header.cta}
-            onChange={(val) => updateField('header.cta', val)}
-          />
-        </button>
+
+        {/* Mobile Navigation Menu */}
+        {isMobileMenuOpen && (
+          <div className="absolute top-full left-0 w-full bg-[#101822] border-t border-white/5 p-6 flex flex-col gap-2 lg:hidden animate-fade-up shadow-2xl">
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={(e) => handleScrollToSection(e, item.id)}
+                className="w-full text-left px-6 py-4 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-white/5 transition-all flex items-center justify-between group"
+              >
+                {item.label}
+                <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
+              </button>
+            ))}
+            <button 
+              onClick={() => openWhatsApp("Olá Dr. Caio, gostaria de agendar uma consulta.")}
+              className="mt-4 w-full rounded-xl bg-[#136dec] py-5 text-sm font-black uppercase tracking-widest text-white text-center shadow-xl shadow-blue-500/20"
+            >
+              {content.header.cta}
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}
       <section id="inicio" className="relative flex min-h-[700px] flex-col justify-center overflow-hidden bg-white py-20 lg:py-32">
         <div className="absolute inset-0 z-0 opacity-10">
           <div className="h-full w-full bg-[url('https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80')] bg-cover bg-center"></div>
-          <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent"></div>
         </div>
 
         <div className="container relative z-10 mx-auto px-6 lg:px-20">
@@ -226,7 +358,7 @@ const App: React.FC = () => {
             <div className="flex flex-wrap gap-4 pt-4">
               <button 
                 onClick={() => openWhatsApp("Olá Dr. Caio, gostaria de falar com um especialista agora.")}
-                className="rounded-xl bg-[#136dec] px-10 py-5 text-base font-bold text-white shadow-xl shadow-blue-500/20 transition-all hover:bg-blue-700 hover:translate-y-[-2px]"
+                className="rounded-xl bg-[#136dec] px-10 py-5 text-base font-bold text-white shadow-xl shadow-blue-500/20 transition-all hover:bg-blue-700 hover:translate-y-[-2px] active:scale-95"
               >
                 <EditableText
                   isAdmin={isAdmin}
@@ -235,93 +367,55 @@ const App: React.FC = () => {
                 />
               </button>
               <button 
-                onClick={() => document.getElementById('sobre')?.scrollIntoView({ behavior: 'smooth' })}
-                className="rounded-xl border border-slate-200 bg-white px-10 py-5 text-base font-bold text-slate-800 transition-all hover:bg-slate-50"
+                onClick={(e) => handleScrollToSection(e, 'sobre')}
+                className="rounded-xl border border-slate-200 bg-white px-10 py-5 text-base font-bold text-slate-800 transition-all hover:bg-slate-50 active:scale-95"
               >
-                <EditableText
-                  isAdmin={isAdmin}
-                  value={content.hero.btn2}
-                  onChange={(val) => updateField('hero.btn2', val)}
-                />
+                {content.hero.btn2}
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* About Section */}
-      <section id="sobre" className="bg-[#f8fafc] py-24 lg:py-32">
+      {/* Sobre Section */}
+      <section id="sobre" className="bg-slate-50 py-24 lg:py-32">
         <div className="container mx-auto px-6 lg:px-20">
-          <div className="grid gap-16 lg:grid-cols-2 lg:items-center">
+          <div className="grid gap-16 lg:grid-cols-2 items-center">
             <div className="relative">
-              <div className="absolute -inset-4 rounded-3xl bg-[#136dec]/10 rotate-3"></div>
+              <div className="absolute -inset-4 rounded-3xl bg-[#136dec]/5 rotate-3"></div>
               <img 
                 src="https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=800" 
-                alt="Lawyer Profile" 
-                className="relative z-10 h-[550px] w-full rounded-3xl object-cover shadow-2xl"
+                alt="Dr. Caio Henrique" 
+                className="relative z-10 h-[500px] w-full rounded-3xl object-cover shadow-2xl"
               />
             </div>
             <div className="space-y-8">
-              <div className="space-y-4">
-                <EditableText
-                  isAdmin={isAdmin}
-                  value={content.about.title}
-                  onChange={(val) => updateField('about.title', val)}
-                  as="h2"
-                  className="text-4xl font-black text-slate-900"
-                />
-                <div className="h-1.5 w-24 bg-[#136dec] rounded-full"></div>
+              <div className="space-y-2">
+                <EditableText isAdmin={isAdmin} value={content.about.title} onChange={(val) => updateField('about.title', val)} as="h2" className="text-4xl font-black text-slate-900" />
+                <div className="h-1.5 w-20 bg-[#136dec] rounded-full"></div>
               </div>
-              
-              <div className="space-y-6">
-                <EditableText
-                  isAdmin={isAdmin}
-                  value={content.about.text1}
-                  onChange={(val) => updateField('about.text1', val)}
-                  as="p"
-                  className="text-lg text-slate-600 leading-relaxed"
-                />
-                <EditableText
-                  isAdmin={isAdmin}
-                  value={content.about.text2}
-                  onChange={(val) => updateField('about.text2', val)}
-                  as="p"
-                  className="text-lg text-slate-600 leading-relaxed"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-10 pt-6">
-                <div className="space-y-1">
-                  <EditableText
-                    isAdmin={isAdmin}
-                    value={content.about.stat1Val}
-                    onChange={(val) => updateField('about.stat1Val', val)}
-                    as="span"
-                    className="text-4xl font-black text-[#136dec]"
-                  />
-                  <EditableText
-                    isAdmin={isAdmin}
-                    value={content.about.stat1Label}
-                    onChange={(val) => updateField('about.stat1Label', val)}
-                    as="p"
-                    className="text-sm font-bold text-slate-500 uppercase tracking-wide"
-                  />
+              <EditableText
+                isAdmin={isAdmin}
+                value={content.about.text1}
+                onChange={(val) => updateField('about.text1', val)}
+                as="p"
+                className="text-lg text-slate-600 leading-relaxed"
+              />
+              <EditableText
+                isAdmin={isAdmin}
+                value={content.about.text2}
+                onChange={(val) => updateField('about.text2', val)}
+                as="p"
+                className="text-lg text-slate-600 leading-relaxed"
+              />
+              <div className="grid grid-cols-2 gap-8 pt-4">
+                <div className="group">
+                  <EditableText isAdmin={isAdmin} value={content.about.stat1Val} onChange={(val) => updateField('about.stat1Val', val)} as="div" className="text-4xl font-black text-[#136dec] group-hover:scale-110 transition-transform origin-left" />
+                  <EditableText isAdmin={isAdmin} value={content.about.stat1Label} onChange={(val) => updateField('about.stat1Label', val)} as="div" className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1" />
                 </div>
-                <div className="space-y-1">
-                  <EditableText
-                    isAdmin={isAdmin}
-                    value={content.about.stat2Val}
-                    onChange={(val) => updateField('about.stat2Val', val)}
-                    as="span"
-                    className="text-4xl font-black text-[#136dec]"
-                  />
-                  <EditableText
-                    isAdmin={isAdmin}
-                    value={content.about.stat2Label}
-                    onChange={(val) => updateField('about.stat2Label', val)}
-                    as="p"
-                    className="text-sm font-bold text-slate-500 uppercase tracking-wide"
-                  />
+                <div className="group">
+                  <EditableText isAdmin={isAdmin} value={content.about.stat2Val} onChange={(val) => updateField('about.stat2Val', val)} as="div" className="text-4xl font-black text-[#136dec] group-hover:scale-110 transition-transform origin-left" />
+                  <EditableText isAdmin={isAdmin} value={content.about.stat2Label} onChange={(val) => updateField('about.stat2Label', val)} as="div" className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1" />
                 </div>
               </div>
             </div>
@@ -349,7 +443,11 @@ const App: React.FC = () => {
 
           <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {content.services.items.map((item, idx) => (
-              <div key={item.id} className={`${item.bgColor} group rounded-3xl p-8 text-left border border-slate-100 shadow-sm transition-all hover:shadow-xl hover:translate-y-[-8px]`}>
+              <div 
+                key={item.id} 
+                className={`${item.bgColor} group rounded-3xl p-8 text-left border border-slate-100 shadow-sm transition-all hover:shadow-xl hover:translate-y-[-8px] cursor-pointer`}
+                onClick={() => setSelectedService(item)}
+              >
                 <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#136dec] shadow-md group-hover:bg-[#136dec] group-hover:text-white transition-colors">
                   <span className="material-symbols-outlined text-3xl">{item.icon}</span>
                 </div>
@@ -375,13 +473,11 @@ const App: React.FC = () => {
                   as="p"
                   className="mt-3 text-sm text-slate-500 leading-relaxed"
                 />
-                <div className="mt-8 space-y-4">
-                  <button 
-                    onClick={() => openWhatsApp(`Olá Dr. Caio, gostaria de saber mais sobre ${item.title}.`)}
-                    className="w-full rounded-xl bg-slate-900 py-4 text-sm font-bold text-white transition-all hover:bg-black"
-                  >
+                <div className="mt-8">
+                  <span className="inline-flex items-center gap-2 text-sm font-bold text-[#136dec] group-hover:translate-x-1 transition-transform">
                     {item.buttonText}
-                  </button>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  </span>
                 </div>
               </div>
             ))}
@@ -417,11 +513,18 @@ const App: React.FC = () => {
                   className="block text-sm font-bold text-slate-800"
                 />
                 <div className="flex gap-2">
-                  <div className="relative flex-grow">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">location_on</span>
-                    <input type="text" placeholder="Seu endereço..." className="w-full rounded-xl border-none bg-white py-4 pl-10 pr-4 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-[#136dec]" />
-                  </div>
-                  <button className="rounded-xl bg-[#136dec] px-6 text-white hover:bg-blue-700 transition-colors">
+                  <input 
+                    type="text" 
+                    value={routeInput}
+                    onChange={(e) => setRouteInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCalculateRoute()}
+                    placeholder="Seu endereço..." 
+                    className="flex-grow rounded-xl border-none bg-white py-4 px-4 shadow-sm ring-1 ring-slate-200 focus:ring-2 focus:ring-[#136dec]" 
+                  />
+                  <button 
+                    onClick={handleCalculateRoute}
+                    className="rounded-xl bg-[#136dec] px-6 text-white hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 active:scale-95"
+                  >
                     <span className="material-symbols-outlined">directions</span>
                   </button>
                 </div>
@@ -429,37 +532,23 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="relative h-[400px] w-full lg:h-auto lg:flex-1">
-             <div className="h-full w-full bg-[url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=1200')] bg-cover bg-center grayscale hover:grayscale-0 transition-all duration-700"></div>
-             <a 
-               href="https://www.google.com/maps/search/?api=1&query=Av.+Paulista,+1000+-+Bela+Vista,+São+Paulo+-+SP,+01310-100" 
-               target="_blank" 
-               rel="noopener noreferrer"
-               className="absolute bottom-6 right-6 rounded-lg bg-white px-5 py-2.5 text-xs font-bold shadow-2xl flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors"
-             >
-               <span className="material-symbols-outlined text-sm">map</span>
-               Ver no Google Maps
-             </a>
+             <div className="h-full w-full bg-[url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=1200')] bg-cover bg-center grayscale group-hover:grayscale-0 transition-all duration-1000"></div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer id="contato" className="bg-[#101822] text-white scroll-margin-top-0">
+      <footer id="contato" className="bg-[#101822] text-white">
         <div className="container mx-auto px-6 py-20 lg:px-20">
           <div className="grid gap-16 lg:grid-cols-4">
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#136dec]">
-                  <span className="material-symbols-outlined text-sm">balance</span>
-                </div>
-                <EditableText
-                  isAdmin={isAdmin}
-                  value={content.footer.logoText}
-                  onChange={(val) => updateField('footer.logoText', val)}
-                  as="span"
-                  className="text-lg font-bold"
-                />
-              </div>
+              <EditableText
+                isAdmin={isAdmin}
+                value={content.footer.logoText}
+                onChange={(val) => updateField('footer.logoText', val)}
+                as="span"
+                className="text-lg font-bold"
+              />
               <EditableText
                 isAdmin={isAdmin}
                 value={content.footer.desc}
@@ -468,85 +557,39 @@ const App: React.FC = () => {
                 className="text-sm text-slate-400 leading-relaxed"
               />
             </div>
-
+            
             <div className="space-y-6">
-              <EditableText
-                isAdmin={isAdmin}
-                value={content.footer.col1Title}
-                onChange={(val) => updateField('footer.col1Title', val)}
-                as="h4"
-                className="text-xs font-black uppercase tracking-widest text-slate-500"
-              />
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Links Rápidos</h4>
               <ul className="space-y-3 text-sm text-slate-400">
-                <li><a href="#inicio" onClick={(e) => handleScrollToSection(e, 'inicio')} className="hover:text-white transition-colors">Início</a></li>
-                <li><a href="#sobre" onClick={(e) => handleScrollToSection(e, 'sobre')} className="hover:text-white transition-colors">Sobre Mim</a></li>
-                <li><a href="#atuacao" onClick={(e) => handleScrollToSection(e, 'atuacao')} className="hover:text-white transition-colors">Áreas de Atuação</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog Jurídico</a></li>
+                {menuItems.map(item => (
+                  <li key={item.id}>
+                    <button onClick={(e) => handleScrollToSection(e, item.id)} className="hover:text-white transition-colors">{item.label}</button>
+                  </li>
+                ))}
               </ul>
             </div>
 
             <div className="space-y-6">
-              <EditableText
-                isAdmin={isAdmin}
-                value={content.footer.col2Title}
-                onChange={(val) => updateField('footer.col2Title', val)}
-                as="h4"
-                className="text-xs font-black uppercase tracking-widest text-slate-500"
-              />
+              <EditableText isAdmin={isAdmin} value={content.footer.col2Title} onChange={(val) => updateField('footer.col2Title', val)} as="h4" className="text-xs font-black uppercase tracking-widest text-slate-500" />
               <ul className="space-y-4 text-sm text-slate-400">
                 <li className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-[#136dec] text-lg">call</span>
-                  <a href={`tel:${WHATSAPP_NUMBER}`} className="hover:text-white">
-                    <EditableText isAdmin={isAdmin} value={content.footer.phone} onChange={(val) => updateField('footer.phone', val)} />
-                  </a>
+                  <EditableText isAdmin={isAdmin} value={content.footer.phone} onChange={(val) => updateField('footer.phone', val)} />
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-[#136dec] text-lg">mail</span>
                   <EditableText isAdmin={isAdmin} value={content.footer.email} onChange={(val) => updateField('footer.email', val)} />
                 </li>
-                <li className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-[#136dec] text-lg">schedule</span>
-                  <EditableText isAdmin={isAdmin} value={content.footer.hours} onChange={(val) => updateField('footer.hours', val)} />
-                </li>
               </ul>
-            </div>
-
-            <div className="space-y-6">
-              <EditableText
-                isAdmin={isAdmin}
-                value={content.footer.col3Title}
-                onChange={(val) => updateField('footer.col3Title', val)}
-                as="h4"
-                className="text-xs font-black uppercase tracking-widest text-slate-500"
-              />
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => openWhatsApp("Olá Dr. Caio, vim através do Instagram.")}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-xs font-bold hover:bg-pink-600 transition-all"
-                >
-                  IG
-                </button>
-                <button 
-                  onClick={() => openWhatsApp("Olá Dr. Caio, vi seu perfil no LinkedIn.")}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-xs font-bold hover:bg-blue-600 transition-all"
-                >
-                  LI
-                </button>
-                <button 
-                  onClick={() => openWhatsApp("Olá Dr. Caio, gostaria de iniciar um atendimento.")}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-xs font-bold hover:bg-emerald-600 transition-all"
-                >
-                  WA
-                </button>
-              </div>
             </div>
           </div>
 
-          <div className="mt-20 border-t border-slate-800 pt-10 text-center">
+          <div className="mt-20 border-t border-white/5 pt-10 text-center relative">
             <p className="text-xs text-slate-500">© 2024 Dr. Caio Henrique. Todos os direitos reservados. OAB/SP 000.000</p>
+            
             <button 
               onClick={() => isAdmin ? setIsAdmin(false) : setShowLogin(true)}
-              className="mt-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 bg-slate-800/50 text-[10px] uppercase font-black tracking-widest text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
+              className="mt-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 bg-white/5 text-[10px] uppercase font-black tracking-widest text-slate-500 hover:text-white hover:bg-white/10 transition-all active:scale-95"
             >
               <span className="material-symbols-outlined text-sm">{isAdmin ? 'lock_open' : 'lock'}</span>
               Área Administrativa
@@ -555,7 +598,6 @@ const App: React.FC = () => {
         </div>
       </footer>
 
-      {/* Chat Bot Widget */}
       <ChatWidget />
     </div>
   );
